@@ -10,9 +10,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 // Import auth context to get logout function
 import { useAuth } from '../../store/AuthContext';
+import { RootStackParamList } from '../../navigation/AppNavigator';
 
 // Reusable menu item component
 function MenuItem({ 
@@ -52,7 +54,7 @@ function SectionHeader({ title }: { title: string }) {
 }
 
 export default function SettingsScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { logout } = useAuth();
 
   // Handle logout button press
@@ -91,17 +93,17 @@ export default function SettingsScreen() {
           <MenuItem 
             icon="person-outline" 
             label="Edit Profile" 
-            onPress={() => console.log('Edit Profile')}
+            onPress={() => navigation.navigate('EditProfile')}
           />
           <MenuItem 
             icon="lock-closed-outline" 
             label="Change Password" 
-            onPress={() => console.log('Change Password')}
+            onPress={() => navigation.navigate('ChangePassword')}
           />
           <MenuItem 
             icon="shield-checkmark-outline" 
             label="Privacy" 
-            onPress={() => console.log('Privacy')}
+            onPress={() => navigation.navigate('Privacy')}
             showBorder={false}
           />
         </View>
@@ -112,17 +114,17 @@ export default function SettingsScreen() {
           <MenuItem 
             icon="bookmark-outline" 
             label="Saved Posts" 
-            onPress={() => console.log('Saved posts')}
+            onPress={() => Alert.alert('Saved Posts', 'View in Profile → Saved tab')}
           />
           <MenuItem 
             icon="heart-outline" 
             label="Liked Posts" 
-            onPress={() => console.log('Liked posts')}
+            onPress={() => Alert.alert('Liked Posts', 'View in Profile → Liked tab')}
           />
           <MenuItem 
             icon="location-outline" 
             label="Check-ins" 
-            onPress={() => console.log('Check-ins')}
+            onPress={() => Alert.alert('Check-ins', 'Coming soon!')}
             showBorder={false}
           />
         </View>
@@ -133,17 +135,17 @@ export default function SettingsScreen() {
           <MenuItem 
             icon="notifications-outline" 
             label="Notifications" 
-            onPress={() => console.log('Notifications')}
+            onPress={() => navigation.navigate('NotificationsSettings')}
           />
           <MenuItem 
             icon="moon-outline" 
             label="Appearance" 
-            onPress={() => console.log('Appearance')}
+            onPress={() => navigation.navigate('Appearance')}
           />
           <MenuItem 
             icon="language-outline" 
             label="Language" 
-            onPress={() => console.log('Language')}
+            onPress={() => Alert.alert('Language', 'More languages coming soon!')}
             showBorder={false}
           />
         </View>
@@ -154,17 +156,17 @@ export default function SettingsScreen() {
           <MenuItem 
             icon="help-circle-outline" 
             label="Help & Support" 
-            onPress={() => console.log('Help')}
+            onPress={() => Alert.alert('Help & Support', 'Contact us at support@socialhub.com')}
           />
           <MenuItem 
             icon="document-text-outline" 
             label="Terms of Service" 
-            onPress={() => console.log('Terms')}
+            onPress={() => Alert.alert('Terms of Service', 'Our terms and conditions will be displayed here')}
           />
           <MenuItem 
             icon="information-circle-outline" 
             label="About" 
-            onPress={() => console.log('About')}
+            onPress={() => Alert.alert('About SocialHub', 'Version 1.0.0\n\nBuilt with ❤️ using React Native')}
             showBorder={false}
           />
         </View>

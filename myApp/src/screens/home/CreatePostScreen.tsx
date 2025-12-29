@@ -585,7 +585,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '50%',
+    height: 350,
+    paddingBottom: 30,
   },
   emojiModalHeader: {
     flexDirection: 'row',
@@ -605,19 +606,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   emojiGridContent: {
-    padding: 16,
+    padding: 12,
+    paddingBottom: 20,
   },
   emojiRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
   },
   emojiButton: {
-    width: '10%',
-    aspectRatio: 1,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 4,
+    margin: 4,
   },
   emojiText: {
     fontSize: 28,

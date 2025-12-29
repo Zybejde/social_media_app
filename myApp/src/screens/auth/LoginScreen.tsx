@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -7,8 +7,13 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import Toast from 'react-native-toast-message';
 
 // Navigation hook to move between screens
 import { useNavigation } from '@react-navigation/native';
@@ -18,44 +23,122 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 // Import our auth hook - THIS IS THE KEY!
 import { useAuth } from '../../store/AuthContext';
 
+// Complete auth session for web browser
+WebBrowser.maybeCompleteAuthSession();
+
 // Define the screens in Auth flow (for TypeScript)
 type AuthStackParamList = {
   Login: undefined;
   Signup: undefined;
 };
 
+// Google Client IDs - From Google Cloud Console
+const GOOGLE_CLIENT_ID_WEB = '393111149202-7lmgl03dohc38cm3dnghiakqq88nvkg8.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID_IOS = ''; // Add if you want iOS support
+const GOOGLE_CLIENT_ID_ANDROID = '393111149202-65jljaimmjksps6pf3ka0id932iofp3c.apps.googleusercontent.com';
+
 export default function LoginScreen() {
   // State for form inputs
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   // Navigation
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
   
   // Get the login function from auth context
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
+
+  // Google Auth Request
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    webClientId: GOOGLE_CLIENT_ID_WEB,
+    iosClientId: GOOGLE_CLIENT_ID_IOS,
+    androidClientId: GOOGLE_CLIENT_ID_ANDROID,
+  });
+
+  // Handle Google Auth Response
+  useEffect(() => {
+    const processGoogleAuth = async (accessToken?: string | null) => {
+      if (!accessToken) {
+        Toast.show({
+          type: 'error',
+          text1: 'Google Sign-In Failed',
+          text2: 'Failed to get access token',
+          position: 'top',
+        });
+        return;
+      }
+
+      setIsGoogleLoading(true);
+
+      try {
+        const userInfoResponse = await fetch(
+          'https://www.googleapis.com/userinfo/v2/me',
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        const userInfo = await userInfoResponse.json();
+
+        const result = await loginWithGoogle({
+          email: userInfo.email,
+          name: userInfo.name,
+          avatar: userInfo.picture,
+          googleId: userInfo.id,
+        });
+
+        if (!result.success) {
+          Toast.show({
+            type: 'error',
+            text1: 'Google Sign-In Failed',
+            text2: result.error || 'Please try again',
+            position: 'top',
+          });
+        }
+      } catch (error) {
+        console.error('Google sign in error:', error);
+        Toast.show({
+          type: 'error',
+          text1: 'Google Sign-In Failed',
+          text2: 'An error occurred',
+          position: 'top',
+        });
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    };
+
+    if (response?.type === 'success') {
+      processGoogleAuth(response.authentication?.accessToken);
+    }
+  }, [response, loginWithGoogle]);
 
   // Handle login button press
   const handleLogin = async () => {
     // Basic validation
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Toast.show({
+        type: 'error',
+        text1: 'Missing Fields',
+        text2: 'Please fill in all fields',
+        position: 'top',
+        visibilityTime: 3000,
+      });
       return;
     }
 
     setIsLoading(true);
     
-    // Call the login function from AuthContext
-    // This will update the auth state
-    // AppNavigator will automatically show MainNavigator!
     const result = await login(email, password);
     
     if (!result.success) {
-      Alert.alert('Error', result.error || 'Login failed. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Login Failed',
+        text2: result.error || 'Please try again',
+        position: 'top',
+        visibilityTime: 4000,
+      });
     }
-    // No need to navigate manually on success!
-    // The auth state change triggers automatic navigation
     
     setIsLoading(false);
   };
@@ -73,10 +156,7 @@ export default function LoginScreen() {
       <View style={styles.content}>
         {/* Logo/Brand Section */}
         <View style={styles.logoSection}>
-          <View style={styles.logoPlaceholder}>
-            <Text style={styles.logoText}>📱</Text>
-          </View>
-          <Text style={styles.appName}>SocialApp</Text>
+          <Text style={styles.appName}>Social<Text style={styles.appNameAccent}>Hub</Text></Text>
           <Text style={styles.tagline}>Connect with friends & family</Text>
         </View>
 
@@ -121,9 +201,11 @@ export default function LoginScreen() {
             onPress={handleLogin}
             disabled={isLoading}
           >
-            <Text style={styles.loginButtonText}>
-              {isLoading ? 'Logging in...' : 'Log In'}
-            </Text>
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.loginButtonText}>Log In</Text>
+            )}
           </TouchableOpacity>
 
           {/* Divider */}
@@ -133,15 +215,33 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Social Login Buttons (placeholders) */}
-          <TouchableOpacity style={styles.socialButton}>
-            <Text style={styles.socialButtonText}>Continue with Google</Text>
+          {/* Google Sign In Button */}
+          <TouchableOpacity 
+            style={styles.socialButton}
+            onPress={() => promptAsync()}
+            disabled={!request || isGoogleLoading}
+          >
+            {isGoogleLoading ? (
+              <ActivityIndicator color="#333" />
+            ) : (
+              <View style={styles.socialButtonContent}>
+                <Image 
+                  source={{ uri: 'https://www.google.com/favicon.ico' }}
+                  style={styles.socialIcon}
+                />
+                <Text style={styles.socialButtonText}>Continue with Google</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
+          {/* Apple Sign In Button */}
           <TouchableOpacity style={[styles.socialButton, styles.socialButtonApple]}>
-            <Text style={[styles.socialButtonText, styles.socialButtonAppleText]}>
-              Continue with Apple
-            </Text>
+            <View style={styles.socialButtonContent}>
+              <Ionicons name="logo-apple" size={20} color="#fff" />
+              <Text style={[styles.socialButtonText, styles.socialButtonAppleText]}>
+                Continue with Apple
+              </Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -171,25 +271,17 @@ const styles = StyleSheet.create({
   // Logo Section
   logoSection: {
     alignItems: 'center',
-    marginBottom: 40,
-  },
-  logoPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: '#007AFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  logoText: {
-    fontSize: 40,
+    marginBottom: 48,
   },
   appName: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 36,
+    fontWeight: '800',
     color: '#1a1a1a',
     marginBottom: 8,
+    letterSpacing: -1,
+  },
+  appNameAccent: {
+    color: '#007AFF',
   },
   tagline: {
     fontSize: 16,
@@ -236,6 +328,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 20,
+    height: 52,
+    justifyContent: 'center',
   },
   loginButtonDisabled: {
     backgroundColor: '#99c9ff',
@@ -272,6 +366,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     backgroundColor: '#fff',
+    height: 52,
+    justifyContent: 'center',
+  },
+  socialButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  socialIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 10,
   },
   socialButtonText: {
     fontSize: 16,
@@ -284,6 +389,7 @@ const styles = StyleSheet.create({
   },
   socialButtonAppleText: {
     color: '#fff',
+    marginLeft: 8,
   },
 
   // Sign Up Section

@@ -37,6 +37,7 @@ interface Post {
   }[];
   createdAt: string;
   isLiked: boolean;
+  isSaved: boolean;
 }
 
 // Convert API post to local format
@@ -58,6 +59,7 @@ const convertPost = (apiPost: ApiPost): Post => ({
   })),
   createdAt: formatDate(apiPost.createdAt),
   isLiked: apiPost.isLiked || false,
+  isSaved: apiPost.isSaved || false,
 });
 
 // Format date helper
@@ -81,21 +83,30 @@ function PostCard({
   post, 
   onLike, 
   onComment, 
-  onShare 
+  onShare,
+  onSave,
 }: { 
   post: Post;
   onLike: () => void;
   onComment: () => void;
   onShare: () => void;
+  onSave: () => void;
 }) {
   return (
     <View style={styles.postCard}>
       <View style={styles.postHeader}>
         <Image source={{ uri: post.author.avatar }} style={styles.avatar} />
-        <View>
+        <View style={styles.postHeaderInfo}>
           <Text style={styles.authorName}>{post.author.name}</Text>
           <Text style={styles.timestamp}>{post.createdAt}</Text>
         </View>
+        <TouchableOpacity style={styles.saveButton} onPress={onSave}>
+          <Ionicons 
+            name={post.isSaved ? "bookmark" : "bookmark-outline"} 
+            size={22} 
+            color={post.isSaved ? "#007AFF" : "#666"} 
+          />
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.postContent}>{post.content}</Text>
@@ -238,14 +249,11 @@ export default function HomeScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
   // Fetch posts from API
-  const fetchPosts = async (showLoading = true) => {
-    if (showLoading) setIsLoading(true);
-    
+  const fetchPosts = async () => {
     try {
       const response = await postsAPI.getFeed();
       
@@ -255,7 +263,6 @@ export default function HomeScreen() {
     } catch (error) {
       console.error('Failed to fetch posts:', error);
     } finally {
-      setIsLoading(false);
       setIsRefreshing(false);
     }
   };
@@ -270,7 +277,7 @@ export default function HomeScreen() {
   // Pull to refresh
   const handleRefresh = () => {
     setIsRefreshing(true);
-    fetchPosts(false);
+    fetchPosts();
   };
 
   const handleLike = async (postId: string) => {
@@ -371,14 +378,39 @@ export default function HomeScreen() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading posts...</Text>
-      </View>
+  const handleSave = async (postId: string) => {
+    // Optimistic update
+    setPosts(currentPosts => 
+      currentPosts.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            isSaved: !post.isSaved,
+          };
+        }
+        return post;
+      })
     );
-  }
+
+    // Call API
+    try {
+      await postsAPI.toggleSave(postId);
+    } catch (error) {
+      // Revert on error
+      setPosts(currentPosts => 
+        currentPosts.map(post => {
+          if (post.id === postId) {
+            return {
+              ...post,
+              isSaved: !post.isSaved,
+            };
+          }
+          return post;
+        })
+      );
+      console.error('Failed to save post:', error);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -390,6 +422,7 @@ export default function HomeScreen() {
             onLike={() => handleLike(item.id)}
             onComment={() => handleComment(item)}
             onShare={() => handleShare(item)}
+            onSave={() => handleSave(item.id)}
           />
         )}
         keyExtractor={(item) => item.id}
@@ -477,6 +510,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#888',
     marginTop: 2,
+  },
+  postHeaderInfo: {
+    flex: 1,
+  },
+  saveButton: {
+    padding: 8,
   },
   postContent: {
     fontSize: 15,

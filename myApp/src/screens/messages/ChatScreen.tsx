@@ -13,11 +13,14 @@ import {
   Animated,
   Alert,
   ActivityIndicator,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
+import * as ImagePicker from 'expo-image-picker';
 
 // Import API
 import { messagesAPI, Message as ApiMessage } from '../../api';
@@ -80,13 +83,24 @@ export default function ChatScreen() {
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showMediaOptions, setShowMediaOptions] = useState(false);
+
+  // Common emojis
+  const emojis = [
+    '😀', '😂', '😍', '🥰', '😊', '😎', '🤔', '😅',
+    '😭', '😤', '🥺', '😴', '🤗', '😇', '🤩', '😋',
+    '👍', '👎', '👏', '🙌', '🤝', '✌️', '🤞', '💪',
+    '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '💕',
+    '🎉', '🎊', '🎁', '🎈', '✨', '🌟', '💫', '⭐',
+    '🔥', '💯', '👀', '🙈', '🙉', '🙊', '💬', '💭',
+  ];
   
   const flatListRef = useRef<FlatList>(null);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef<Animated.Value>(new Animated.Value(1)).current;
   const recordingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Get user info from route params
@@ -112,8 +126,6 @@ export default function ChatScreen() {
       }
     } catch (error) {
       console.error('Failed to fetch messages:', error);
-    } finally {
-      setIsLoading(false);
     }
   }, [chatUser._id, currentUser?.id]);
 
@@ -254,6 +266,106 @@ export default function ChatScreen() {
     Alert.alert('Recording cancelled');
   };
 
+  // Handle emoji selection
+  const handleEmojiSelect = (emoji: string) => {
+    setNewMessage(prev => prev + emoji);
+  };
+
+  // Handle media picker
+  const handlePickImage = async () => {
+    setShowMediaOptions(false);
+    
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please grant camera roll permissions');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      // Send image message
+      sendMediaMessage('📷 Photo', result.assets[0].uri);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    setShowMediaOptions(false);
+    
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please grant camera permissions');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      sendMediaMessage('📷 Photo', result.assets[0].uri);
+    }
+  };
+
+  const handlePickVideo = async () => {
+    setShowMediaOptions(false);
+    
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please grant camera roll permissions');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      sendMediaMessage('🎬 Video', result.assets[0].uri);
+    }
+  };
+
+  const sendMediaMessage = async (text: string, mediaUri: string) => {
+    if (!chatUser._id) return;
+
+    const tempMessage: Message = {
+      id: `temp-${Date.now()}`,
+      text: text,
+      senderId: 'me',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: 'sent',
+    };
+    setMessages(prev => [...prev, tempMessage]);
+
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
+    try {
+      // In a real app, you would upload the media file first
+      await messagesAPI.sendMessage(chatUser._id, text, 'image');
+    } catch (error) {
+      console.error('Failed to send media:', error);
+    }
+  };
+
+  const handleSendDocument = () => {
+    setShowMediaOptions(false);
+    Alert.alert('Coming Soon', 'Document sharing will be available soon!');
+  };
+
+  const handleSendLocation = () => {
+    setShowMediaOptions(false);
+    Alert.alert('Coming Soon', 'Location sharing will be available soon!');
+  };
+
   const handleCall = () => {
     navigation.navigate('Call', { user: chatUser });
   };
@@ -261,14 +373,6 @@ export default function ChatScreen() {
   const handleVideoCall = () => {
     navigation.navigate('VideoCall', { user: chatUser });
   };
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
-    );
-  }
 
   return (
     <KeyboardAvoidingView
@@ -340,7 +444,10 @@ export default function ChatScreen() {
       ) : (
         /* Normal Input Area */
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.attachButton}>
+          <TouchableOpacity 
+            style={styles.attachButton}
+            onPress={() => setShowMediaOptions(true)}
+          >
             <Ionicons name="add-circle" size={28} color="#007AFF" />
           </TouchableOpacity>
 
@@ -355,8 +462,11 @@ export default function ChatScreen() {
               maxLength={1000}
               editable={!isSending}
             />
-            <TouchableOpacity style={styles.emojiButton}>
-              <Ionicons name="happy-outline" size={24} color="#999" />
+            <TouchableOpacity 
+              style={styles.emojiButton}
+              onPress={() => setShowEmojiPicker(true)}
+            >
+              <Ionicons name="happy-outline" size={24} color="#007AFF" />
             </TouchableOpacity>
           </View>
 
@@ -383,6 +493,103 @@ export default function ChatScreen() {
           )}
         </View>
       )}
+
+      {/* Emoji Picker Modal */}
+      <Modal
+        visible={showEmojiPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEmojiPicker(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowEmojiPicker(false)}
+        >
+          <View style={styles.emojiPickerContainer}>
+            <View style={styles.emojiPickerHeader}>
+              <Text style={styles.emojiPickerTitle}>Emojis</Text>
+              <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={styles.emojiGrid}>
+              {emojis.map((emoji, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.emojiBtn}
+                  onPress={() => {
+                    handleEmojiSelect(emoji);
+                    setShowEmojiPicker(false);
+                  }}
+                >
+                  <Text style={styles.emojiText}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Media Options Modal */}
+      <Modal
+        visible={showMediaOptions}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowMediaOptions(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMediaOptions(false)}
+        >
+          <View style={styles.mediaOptionsContainer}>
+            <View style={styles.mediaOptionsHeader}>
+              <Text style={styles.mediaOptionsTitle}>Send Media</Text>
+              <TouchableOpacity onPress={() => setShowMediaOptions(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.mediaOptionsGrid}>
+              <TouchableOpacity style={styles.mediaOption} onPress={handleTakePhoto}>
+                <View style={[styles.mediaOptionIcon, { backgroundColor: '#E3F2FD' }]}>
+                  <Ionicons name="camera" size={28} color="#1976D2" />
+                </View>
+                <Text style={styles.mediaOptionLabel}>Camera</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.mediaOption} onPress={handlePickImage}>
+                <View style={[styles.mediaOptionIcon, { backgroundColor: '#E8F5E9' }]}>
+                  <Ionicons name="image" size={28} color="#388E3C" />
+                </View>
+                <Text style={styles.mediaOptionLabel}>Gallery</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.mediaOption} onPress={handlePickVideo}>
+                <View style={[styles.mediaOptionIcon, { backgroundColor: '#FCE4EC' }]}>
+                  <Ionicons name="videocam" size={28} color="#C2185B" />
+                </View>
+                <Text style={styles.mediaOptionLabel}>Video</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.mediaOption} onPress={handleSendDocument}>
+                <View style={[styles.mediaOptionIcon, { backgroundColor: '#FFF3E0' }]}>
+                  <Ionicons name="document" size={28} color="#F57C00" />
+                </View>
+                <Text style={styles.mediaOptionLabel}>Document</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.mediaOption} onPress={handleSendLocation}>
+                <View style={[styles.mediaOptionIcon, { backgroundColor: '#F3E5F5' }]}>
+                  <Ionicons name="location" size={28} color="#7B1FA2" />
+                </View>
+                <Text style={styles.mediaOptionLabel}>Location</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -523,8 +730,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 50,
+    paddingVertical: 8,
+    paddingBottom: Platform.OS === 'ios' ? 8 : 10,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
@@ -577,8 +784,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 50,
+    paddingVertical: 10,
+    paddingBottom: Platform.OS === 'ios' ? 10 : 12,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
@@ -622,5 +829,95 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+
+  // Emoji Picker
+  emojiPickerContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: 350,
+  },
+  emojiPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  emojiPickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  emojiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 12,
+    paddingBottom: 30,
+  },
+  emojiBtn: {
+    width: '12.5%',
+    aspectRatio: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emojiText: {
+    fontSize: 28,
+  },
+
+  // Media Options
+  mediaOptionsContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 30,
+  },
+  mediaOptionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  mediaOptionsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  mediaOptionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 20,
+    justifyContent: 'flex-start',
+  },
+  mediaOption: {
+    width: '33.33%',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  mediaOptionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  mediaOptionLabel: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
   },
 });

@@ -1,14 +1,4 @@
-// ============================================
-// STEP 1: IMPORTS
-// ============================================
-// Ask yourself: "What React Native components do I need?"
-// - View = container (like a <div>)
-// - Text = text display
-// - TextInput = input field for typing
-// - FlatList = efficient scrollable list
-// - TouchableOpacity = clickable element
-// - Image = display images
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,106 +7,211 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
-// ============================================
-// STEP 2: DATA
-// ============================================
-// Ask yourself: "What data will I display?"
-// For now, we use fake data. Later this comes from an API.
-const USERS_DATA = [
-  {
-    id: '1',
-    name: 'Sarah Johnson',
-    username: '@sarahj',
-    avatar: 'https://i.pravatar.cc/100?img=1',
-    bio: 'Coffee lover ☕ | Developer',
-  },
-  {
-    id: '2',
-    name: 'Mike Chen',
-    username: '@mikechen',
-    avatar: 'https://i.pravatar.cc/100?img=2',
-    bio: 'Photography enthusiast 📷',
-  },
-  {
-    id: '3',
-    name: 'Emma Wilson',
-    username: '@emmaw',
-    avatar: 'https://i.pravatar.cc/100?img=3',
-    bio: 'Travel | Food | Life',
-  },
-  {
-    id: '4',
-    name: 'Alex Rivera',
-    username: '@alexr',
-    avatar: 'https://i.pravatar.cc/100?img=4',
-    bio: 'Building cool stuff 🚀',
-  },
-  {
-    id: '5',
-    name: 'Jessica Lee',
-    username: '@jesslee',
-    avatar: 'https://i.pravatar.cc/100?img=5',
-    bio: 'Designer & Artist 🎨',
-  },
-];
+// Import API and Auth
+import { usersAPI } from '../../api';
+import { useAuth } from '../../store/AuthContext';
 
-// ============================================
-// STEP 3: COMPONENT
-// ============================================
+// User type for this screen
+interface SearchUser {
+  _id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  bio?: string;
+  followers?: string[];
+  following?: string[];
+  isOnline?: boolean;
+}
 
-// 3a. Small reusable component for each user card
-// TIP: If you repeat similar UI, make it a separate component!
-function UserCard({ user }: { user: typeof USERS_DATA[0] }) {
+// User Card Component
+function UserCard({ 
+  user, 
+  isFollowing,
+  onFollow,
+  onUnfollow,
+  isLoading,
+}: { 
+  user: SearchUser;
+  isFollowing: boolean;
+  onFollow: () => void;
+  onUnfollow: () => void;
+  isLoading: boolean;
+}) {
   return (
-    <TouchableOpacity style={styles.userCard}>
-      {/* Left side: Avatar */}
-      <Image source={{ uri: user.avatar }} style={styles.avatar} />
-      
-      {/* Middle: User info */}
-      <View style={styles.userInfo}>
-        <Text style={styles.userName}>{user.name}</Text>
-        <Text style={styles.userHandle}>{user.username}</Text>
-        <Text style={styles.userBio} numberOfLines={1}>{user.bio}</Text>
+    <View style={styles.userCard}>
+      {/* Avatar with online indicator */}
+      <View style={styles.avatarContainer}>
+        <Image source={{ uri: user.avatar }} style={styles.avatar} />
+        {user.isOnline && <View style={styles.onlineIndicator} />}
       </View>
       
-      {/* Right side: Follow button */}
-      <TouchableOpacity style={styles.followButton}>
-        <Text style={styles.followButtonText}>Follow</Text>
+      {/* User info */}
+      <View style={styles.userInfo}>
+        <Text style={styles.userName}>{user.name}</Text>
+        <Text style={styles.userHandle}>@{user.email.split('@')[0]}</Text>
+        {user.bio && (
+          <Text style={styles.userBio} numberOfLines={1}>{user.bio}</Text>
+        )}
+        <View style={styles.statsRow}>
+          <Text style={styles.statText}>
+            <Text style={styles.statNumber}>{user.followers?.length || 0}</Text> followers
+          </Text>
+          <Text style={styles.statDot}>•</Text>
+          <Text style={styles.statText}>
+            <Text style={styles.statNumber}>{user.following?.length || 0}</Text> following
+          </Text>
+        </View>
+      </View>
+      
+      {/* Follow/Unfollow button */}
+      <TouchableOpacity 
+        style={[
+          styles.followButton,
+          isFollowing && styles.followingButton
+        ]}
+        onPress={isFollowing ? onUnfollow : onFollow}
+        disabled={isLoading}
+      >
+        {isLoading ? (
+          <ActivityIndicator size="small" color={isFollowing ? '#007AFF' : '#fff'} />
+        ) : (
+          <Text style={[
+            styles.followButtonText,
+            isFollowing && styles.followingButtonText
+          ]}>
+            {isFollowing ? 'Following' : 'Follow'}
+          </Text>
+        )}
       </TouchableOpacity>
-    </TouchableOpacity>
+    </View>
   );
 }
 
-// 3b. Main Screen Component
+// Main Search Screen
 export default function SearchScreen() {
-  // ----------------------------------------
-  // STATE - What can change on this screen?
-  // ----------------------------------------
-  // The search query that user types
+  const { user: currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // ----------------------------------------
-  // COMPUTED VALUES - Derived from state
-  // ----------------------------------------
-  // Filter users based on search query
-  // This recalculates every time searchQuery changes
-  const filteredUsers = USERS_DATA.filter((user) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      user.name.toLowerCase().includes(query) ||
-      user.username.toLowerCase().includes(query)
-    );
-  });
+  const [users, setUsers] = useState<SearchUser[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [loadingUsers, setLoadingUsers] = useState<Set<string>>(new Set());
 
-  // ----------------------------------------
-  // JSX - What does the screen look like?
-  // ----------------------------------------
+  // Fetch users from API
+  const fetchUsers = useCallback(async () => {
+    try {
+      const response = await usersAPI.getUsers(searchQuery);
+      
+      if (response.data?.users) {
+        setUsers(response.data.users);
+        
+        // Get the IDs of users that the current user is following
+        const followingSet = new Set<string>();
+        response.data.users.forEach((user: SearchUser) => {
+          if (user.followers?.includes(currentUser?.id || '')) {
+            followingSet.add(user._id);
+          }
+        });
+        setFollowingIds(followingSet);
+      }
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [searchQuery, currentUser?.id]);
+
+  // Fetch users when screen focuses
+  useFocusEffect(
+    useCallback(() => {
+      fetchUsers();
+    }, [fetchUsers])
+  );
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchUsers();
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [searchQuery, fetchUsers]);
+
+  // Handle follow
+  const handleFollow = async (userId: string) => {
+    setLoadingUsers(prev => new Set(prev).add(userId));
+    
+    try {
+      const response = await usersAPI.followUser(userId);
+      
+      if (response.data) {
+        setFollowingIds(prev => new Set(prev).add(userId));
+        // Update the user's followers count locally
+        setUsers(prev => prev.map(u => 
+          u._id === userId 
+            ? { ...u, followers: [...(u.followers || []), currentUser?.id || ''] }
+            : u
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to follow user:', error);
+      Alert.alert('Error', 'Failed to follow user');
+    } finally {
+      setLoadingUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
+    }
+  };
+
+  // Handle unfollow
+  const handleUnfollow = async (userId: string) => {
+    setLoadingUsers(prev => new Set(prev).add(userId));
+    
+    try {
+      const response = await usersAPI.unfollowUser(userId);
+      
+      if (response.data) {
+        setFollowingIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(userId);
+          return newSet;
+        });
+        // Update the user's followers count locally
+        setUsers(prev => prev.map(u => 
+          u._id === userId 
+            ? { ...u, followers: (u.followers || []).filter(id => id !== currentUser?.id) }
+            : u
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to unfollow user:', error);
+      Alert.alert('Error', 'Failed to unfollow user');
+    } finally {
+      setLoadingUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
+    }
+  };
+
+  // Handle refresh
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    fetchUsers();
+  };
+
   return (
     <View style={styles.container}>
-      {/* Search Input Box */}
+      {/* Search Input */}
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
         <TextInput
@@ -124,11 +219,10 @@ export default function SearchScreen() {
           placeholder="Search users..."
           placeholderTextColor="#999"
           value={searchQuery}
-          onChangeText={setSearchQuery}  // Updates state as user types
+          onChangeText={setSearchQuery}
           autoCapitalize="none"
           autoCorrect={false}
         />
-        {/* Show clear button only when there's text */}
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
             <Ionicons name="close-circle" size={20} color="#999" />
@@ -136,37 +230,56 @@ export default function SearchScreen() {
         )}
       </View>
 
-      {/* Results List */}
+      {/* Users List */}
       <FlatList
-        data={filteredUsers}  // The filtered array
-        renderItem={({ item }) => <UserCard user={item} />}
-        keyExtractor={(item) => item.id}
+        data={users}
+        renderItem={({ item }) => (
+          <UserCard 
+            user={item}
+            isFollowing={followingIds.has(item._id)}
+            onFollow={() => handleFollow(item._id)}
+            onUnfollow={() => handleUnfollow(item._id)}
+            isLoading={loadingUsers.has(item._id)}
+          />
+        )}
+        keyExtractor={(item) => item._id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
-        // What to show when no results
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#007AFF']}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="search-outline" size={48} color="#ccc" />
+            <Ionicons name="people-outline" size={48} color="#ccc" />
             <Text style={styles.emptyText}>No users found</Text>
-            <Text style={styles.emptySubtext}>Try a different search term</Text>
+            <Text style={styles.emptySubtext}>
+              {searchQuery ? 'Try a different search term' : 'No other users yet'}
+            </Text>
           </View>
+        }
+        ListHeaderComponent={
+          !searchQuery && users.length > 0 ? (
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Suggested for you</Text>
+            </View>
+          ) : null
         }
       />
     </View>
   );
 }
 
-// ============================================
-// STEP 4: STYLES
-// ============================================
-// Ask yourself: "How should each element look?"
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
   
-  // Search bar styles
+  // Search bar
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -187,12 +300,35 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   
-  // List styles
-  listContent: {
-    paddingHorizontal: 16,
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
   },
   
-  // User card styles
+  // List
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  
+  // Section header
+  sectionHeader: {
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  
+  // User card
   userCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -200,11 +336,30 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  avatarContainer: {
+    position: 'relative',
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   userInfo: {
     flex: 1,
@@ -225,19 +380,48 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 4,
   },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  statText: {
+    fontSize: 12,
+    color: '#888',
+  },
+  statNumber: {
+    fontWeight: '600',
+    color: '#666',
+  },
+  statDot: {
+    marginHorizontal: 6,
+    color: '#ccc',
+  },
+  
+  // Follow button
   followButton: {
     backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: 20,
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  followingButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#007AFF',
   },
   followButtonText: {
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
   },
+  followingButtonText: {
+    color: '#007AFF',
+  },
   
-  // Empty state styles
+  // Empty state
   emptyContainer: {
     alignItems: 'center',
     paddingTop: 60,

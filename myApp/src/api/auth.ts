@@ -55,6 +55,17 @@ export const authAPI = {
     return response;
   },
 
+  // Login with Google
+  loginWithGoogle: async (data: { email: string; name: string; avatar?: string; googleId: string }) => {
+    const response = await api.post<AuthResponse>('/auth/google', data);
+
+    if (response.data?.token) {
+      await setToken(response.data.token);
+    }
+
+    return response;
+  },
+
   // Logout
   logout: async () => {
     const response = await api.post('/auth/logout', {});

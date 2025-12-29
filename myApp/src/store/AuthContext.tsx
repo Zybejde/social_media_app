@@ -11,12 +11,21 @@ interface User {
   bio?: string;
 }
 
+// Google user data type
+interface GoogleUserData {
+  email: string;
+  name: string;
+  avatar?: string;
+  googleId: string;
+}
+
 interface AuthContextType {
   user: User | null;           // The logged-in user (null if not logged in)
   isLoggedIn: boolean;         // Quick check for auth state
   isLoading: boolean;          // Loading state for initial auth check
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signup: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: (googleData: GoogleUserData) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateUser: (userData: Partial<User>) => void;
 }
@@ -111,6 +120,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Login with Google function
+  const loginWithGoogle = async (googleData: GoogleUserData): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await authAPI.loginWithGoogle(googleData);
+      
+      if (response.error) {
+        return { success: false, error: response.error };
+      }
+      
+      if (response.data?.user) {
+        setUser(convertUser(response.data.user));
+        return { success: true };
+      }
+      
+      return { success: false, error: 'Google login failed' };
+    } catch (error) {
+      console.error('Google login error:', error);
+      return { success: false, error: 'An unexpected error occurred' };
+    }
+  };
+
   // Logout function - called from ProfileScreen/SettingsScreen
   const logout = async () => {
     try {
@@ -136,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
     login,
     signup,
+    loginWithGoogle,
     logout,
     updateUser,
   };

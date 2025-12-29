@@ -7,7 +7,6 @@ import {
   Image,
   StyleSheet,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -126,13 +125,10 @@ function ConversationItem({
 export default function MessagesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [conversations, setConversations] = useState<LocalConversation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Fetch conversations from API
-  const fetchConversations = async (showLoading = true) => {
-    if (showLoading) setIsLoading(true);
-    
+  const fetchConversations = async () => {
     try {
       const response = await messagesAPI.getConversations();
       
@@ -142,7 +138,6 @@ export default function MessagesScreen() {
     } catch (error) {
       console.error('Failed to fetch conversations:', error);
     } finally {
-      setIsLoading(false);
       setIsRefreshing(false);
     }
   };
@@ -157,7 +152,7 @@ export default function MessagesScreen() {
   // Pull to refresh
   const handleRefresh = () => {
     setIsRefreshing(true);
-    fetchConversations(false);
+    fetchConversations();
   };
 
   const openChat = (user: { _id: string; name: string; avatar: string }) => {
@@ -167,15 +162,6 @@ export default function MessagesScreen() {
   const openNewMessage = () => {
     navigation.navigate('NewMessage');
   };
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading messages...</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>

@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/home/HomeScreen';
 import SearchScreen from '../screens/search/SearchScreen';
 import MessagesScreen from '../screens/messages/MessagesScreen';
+import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 
 // Import types from AppNavigator
@@ -58,6 +59,8 @@ export default function MainNavigator() {
             iconName = focused ? 'search' : 'search-outline';
           } else if (route.name === 'Messages') {
             iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
+          } else if (route.name === 'Notifications') {
+            iconName = focused ? 'notifications' : 'notifications-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           } else {
@@ -89,6 +92,11 @@ export default function MainNavigator() {
         name="Messages" 
         component={MessagesScreen}
         options={{ headerTitle: 'Chats' }}
+      />
+      <Tab.Screen 
+        name="Notifications" 
+        component={NotificationsScreen}
+        options={{ headerTitle: 'Notifications' }}
       />
       <Tab.Screen 
         name="Profile" 
