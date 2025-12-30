@@ -27,13 +27,14 @@ WebBrowser.maybeCompleteAuthSession();
 // Google Client IDs - From Google Cloud Console
 const GOOGLE_CLIENT_ID_WEB = '393111149202-7lmgl03dohc38cm3dnghiakqq88nvkg8.apps.googleusercontent.com';
 const GOOGLE_CLIENT_ID_IOS = ''; // Add if you want iOS support
-const GOOGLE_CLIENT_ID_ANDROID = '393111149202-65jljaimmjksps6pf3ka0id932iofp3c.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID_ANDROID = '';
 
 export default function SignupScreen() {
   // Form state
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
@@ -43,8 +44,9 @@ export default function SignupScreen() {
   // Get the signup function from auth context
   const { signup, loginWithGoogle } = useAuth();
 
-  // Google Auth Request
+  // Google Auth Request - uses Expo auth proxy automatically
   const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: GOOGLE_CLIENT_ID_WEB,
     webClientId: GOOGLE_CLIENT_ID_WEB,
     iosClientId: GOOGLE_CLIENT_ID_IOS,
     androidClientId: GOOGLE_CLIENT_ID_ANDROID,
@@ -154,13 +156,13 @@ export default function SignupScreen() {
     >
       <View style={styles.form}>
         <Text style={styles.appName}>Social<Text style={styles.appNameAccent}>Hub</Text></Text>
-        <Text style={styles.title}>Create Account</Text>
+        <Text style={styles.title}>Create account</Text>
         <Text style={styles.subtitle}>Join our community today</Text>
 
         {/* Name Input */}
         <TextInput
           style={styles.input}
-          placeholder="Full Name"
+          placeholder="Full name"
           placeholderTextColor="#999"
           value={name}
           onChangeText={setName}
@@ -179,14 +181,26 @@ export default function SignupScreen() {
         />
 
         {/* Password Input */}
-        <TextInput
-          style={styles.input}
-          placeholder="Password (min 6 characters)"
-          placeholderTextColor="#999"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Password (min 6 characters)"
+            placeholderTextColor="#999"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+          />
+          <TouchableOpacity 
+            style={styles.eyeButton}
+            onPress={() => setShowPassword(!showPassword)}
+          >
+            <Ionicons 
+              name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
+              size={22} 
+              color="#666" 
+            />
+          </TouchableOpacity>
+        </View>
 
         {/* Signup Button */}
         <TouchableOpacity 
@@ -197,7 +211,7 @@ export default function SignupScreen() {
           {isLoading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>Create Account</Text>
+            <Text style={styles.buttonText}>Create account</Text>
           )}
         </TouchableOpacity>
 
@@ -290,6 +304,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     color: '#333',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    marginBottom: 16,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#333',
+  },
+  eyeButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   button: {
     backgroundColor: '#007AFF',

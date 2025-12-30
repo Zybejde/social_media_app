@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Modal,
   Alert,
   Platform,
 } from 'react-native';
@@ -56,23 +57,12 @@ function SectionHeader({ title }: { title: string }) {
 export default function SettingsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { logout } = useAuth();
+  const [showLogoutSheet, setShowLogoutSheet] = useState(false);
 
-  // Handle logout button press
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
-          style: 'destructive',
-          onPress: () => {
-            logout();
-          }
-        },
-      ]
-    );
+  // Handle logout confirmation
+  const handleConfirmLogout = () => {
+    setShowLogoutSheet(false);
+    logout();
   };
 
   return (
@@ -104,27 +94,6 @@ export default function SettingsScreen() {
             icon="shield-checkmark-outline" 
             label="Privacy" 
             onPress={() => navigation.navigate('Privacy')}
-            showBorder={false}
-          />
-        </View>
-
-        {/* Content Section */}
-        <SectionHeader title="Content" />
-        <View style={styles.menuSection}>
-          <MenuItem 
-            icon="bookmark-outline" 
-            label="Saved Posts" 
-            onPress={() => Alert.alert('Saved Posts', 'View in Profile → Saved tab')}
-          />
-          <MenuItem 
-            icon="heart-outline" 
-            label="Liked Posts" 
-            onPress={() => Alert.alert('Liked Posts', 'View in Profile → Liked tab')}
-          />
-          <MenuItem 
-            icon="location-outline" 
-            label="Check-ins" 
-            onPress={() => Alert.alert('Check-ins', 'Coming soon!')}
             showBorder={false}
           />
         </View>
@@ -172,7 +141,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <TouchableOpacity style={styles.logoutButton} onPress={() => setShowLogoutSheet(true)}>
           <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
@@ -180,6 +149,51 @@ export default function SettingsScreen() {
         {/* Version info */}
         <Text style={styles.version}>Version 1.0.0</Text>
       </ScrollView>
+
+      {/* Logout Bottom Sheet */}
+      <Modal
+        visible={showLogoutSheet}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowLogoutSheet(false)}
+      >
+        <TouchableOpacity 
+          style={styles.sheetOverlay} 
+          activeOpacity={1}
+          onPress={() => setShowLogoutSheet(false)}
+        >
+          <View style={styles.sheetContainer}>
+            {/* Handle bar */}
+            <View style={styles.sheetHandle} />
+            
+            {/* Icon */}
+            <View style={styles.sheetIconContainer}>
+              <Ionicons name="log-out-outline" size={32} color="#FF3B30" />
+            </View>
+            
+            {/* Title & Message */}
+            <Text style={styles.sheetTitle}>Logout</Text>
+            <Text style={styles.sheetMessage}>Are you sure you want to logout?</Text>
+            
+            {/* Buttons */}
+            <View style={styles.sheetButtons}>
+              <TouchableOpacity 
+                style={styles.sheetCancelBtn}
+                onPress={() => setShowLogoutSheet(false)}
+              >
+                <Text style={styles.sheetCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.sheetLogoutBtn}
+                onPress={handleConfirmLogout}
+              >
+                <Text style={styles.sheetLogoutText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -294,6 +308,79 @@ const styles = StyleSheet.create({
     fontSize: 13,
     paddingVertical: 24,
     paddingBottom: 40,
+  },
+
+  // Bottom Sheet Styles
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  sheetContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    alignItems: 'center',
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#ddd',
+    borderRadius: 2,
+    marginBottom: 20,
+  },
+  sheetIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FFF0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  sheetMessage: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  sheetButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  sheetCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  sheetCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  sheetLogoutBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+  },
+  sheetLogoutText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
 

@@ -30,17 +30,19 @@ WebBrowser.maybeCompleteAuthSession();
 type AuthStackParamList = {
   Login: undefined;
   Signup: undefined;
+  ForgotPassword: undefined;
 };
 
 // Google Client IDs - From Google Cloud Console
 const GOOGLE_CLIENT_ID_WEB = '393111149202-7lmgl03dohc38cm3dnghiakqq88nvkg8.apps.googleusercontent.com';
 const GOOGLE_CLIENT_ID_IOS = ''; // Add if you want iOS support
-const GOOGLE_CLIENT_ID_ANDROID = '393111149202-65jljaimmjksps6pf3ka0id932iofp3c.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID_ANDROID = '';
 
 export default function LoginScreen() {
   // State for form inputs
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
@@ -50,8 +52,9 @@ export default function LoginScreen() {
   // Get the login function from auth context
   const { login, loginWithGoogle } = useAuth();
 
-  // Google Auth Request
+  // Google Auth Request - uses Expo auth proxy automatically
   const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: GOOGLE_CLIENT_ID_WEB,
     webClientId: GOOGLE_CLIENT_ID_WEB,
     iosClientId: GOOGLE_CLIENT_ID_IOS,
     androidClientId: GOOGLE_CLIENT_ID_ANDROID,
@@ -180,19 +183,34 @@ export default function LoginScreen() {
           {/* Password Input */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your password"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Enter your password"
+                placeholderTextColor="#999"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity 
+                style={styles.eyeButton}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Ionicons 
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
+                  size={22} 
+                  color="#666" 
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Forgot Password Link */}
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+          <TouchableOpacity 
+            style={styles.forgotPassword}
+            onPress={() => navigation.navigate('ForgotPassword')}
+          >
+            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
           </TouchableOpacity>
 
           {/* Login Button */}
@@ -253,6 +271,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
     </KeyboardAvoidingView>
   );
 }
@@ -310,6 +329,25 @@ const styles = StyleSheet.create({
     color: '#333',
     borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#333',
+  },
+  eyeButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
@@ -407,4 +445,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+
 });
